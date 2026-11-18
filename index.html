@@ -159,6 +159,9 @@
                         🔊 音效: 開
                     </button>
                 </div>
+                <button id="test-sound-btn" class="mt-1.5 w-full rounded-xl py-1.5 px-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-900 dark:text-amber-200 text-xs font-semibold transition cursor-pointer">
+                    🔔 點此啟用並測試機械翻板聲
+                </button>
             </div>
 
             <!-- 模型匯出按鈕 -->
@@ -177,7 +180,7 @@
     <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center gap-2 w-max max-w-[92vw]">
         <div id="toast-msg" class="hidden glass-panel rounded-full px-4 py-2 text-xs font-semibold text-emerald-700 shadow-lg transition-all duration-300"></div>
         <div class="glass-panel rounded-full px-4 py-1.5 text-[11px] opacity-80 pointer-events-auto">
-            左鍵拖曳旋轉 · 滾輪縮放 · 右鍵平移
+            點擊「測試機械翻板聲」解除手機靜音限制
         </div>
     </div>
 
@@ -198,13 +201,11 @@
         let targetCamPos = null;
         let targetLookAt = null;
 
-        // 翻板時鐘狀態
         const flipUnits = {};
         const textureCache = {};
         let customTextColor = '#f8fafc';
         let customCardBgColor = '#1e293b';
         let soundEnabled = true;
-        let audioCtx = null;
 
         function showToast(text, isError = false) {
             const toast = document.getElementById('toast-msg');
@@ -220,47 +221,139 @@
         }
 
         // ==========================================
-        // 2. 雙脈衝機械翻頁音效 (Web Audio API)
+        // 2. iOS / WebView 專用雙通道機械音效引擎
+        //    結合 HTML5 <audio> 媒體聲道解鎖 + Web Audio 實體機械衝擊波
         // ==========================================
-        function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let audioCtx = null;
+        let noiseBuffer = null;
+        let iosMediaUnlocked = false;
+        let htmlAudioPool = [];
+        let poolIdx = 0;
+
+        // 動態產生真實機械翻板 WAV 音訊（繞過 iOS 靜音鍵限制）
+        function createMechanicalClickWavUrl() {
+            const sampleRate = 22050;
+            const duration = 0.28; // 280ms 雙重機械撞擊聲
+            const numSamples = Math.floor(sampleRate * duration);
+            const buffer = new ArrayBuffer(44 + numSamples * 2);
+            const view = new DataView(buffer);
+
+            const writeStr = (offset, str) => {
+                for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+            };
+            writeStr(0, 'RIFF');
+            view.setUint32(4, 36 + numSamples * 2, true);
+            writeStr(8, 'WAVE');
+            writeStr(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeStr(36, 'data');
+            view.setUint32(40, numSamples * 2, true);
+
+            for (let i = 0; i < numSamples; i++) {
+                const t = i / sampleRate;
+                let sample = 0;
+
+                // 第一聲：t = 0.00s 卡榫脫開輕響
+                if (t < 0.035) {
+                    const env1 = Math.exp(-t * 140);
+                    const noise1 = (Math.random() * 2 - 1) * 0.45;
+                    const body1 = Math.sin(2 * Math.PI * 380 * t) * 0.4;
+                    sample += (noise1 + body1) * env1 * 0.65;
+                }
+
+                // 第二聲：t = 0.19s 翻板落下撞擊木箱與黃銅軸的清脆拍擊聲
+                if (t >= 0.19) {
+                    const dt = t - 0.19;
+                    const env2 = Math.exp(-dt * 95);
+                    const impactNoise = (Math.random() * 2 - 1) * Math.exp(-dt * 180) * 0.85;
+                    const woodThump = Math.sin(2 * Math.PI * (165 * Math.exp(-dt * 18)) * dt) * 0.75;
+                    const metallicTick = Math.sin(2 * Math.PI * 1150 * dt) * Math.exp(-dt * 240) * 0.35;
+                    sample += (impactNoise + woodThump + metallicTick) * env2;
+                }
+
+                sample = Math.max(-1, Math.min(1, sample));
+                view.setInt16(44 + i * 2, sample * 32767, true);
+            }
+
+            const blob = new Blob([buffer], { type: 'audio/wav' });
+            return URL.createObjectURL(blob);
+        }
+
+        function initAudioSystem() {
+            if (htmlAudioPool.length === 0) {
+                const wavUrl = createMechanicalClickWavUrl();
+                for (let i = 0; i < 4; i++) {
+                    const aud = new Audio(wavUrl);
+                    aud.preload = 'auto';
+                    aud.volume = 0.95;
+                    htmlAudioPool.push(aud);
+                }
+            }
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx && !audioCtx) {
+                audioCtx = new AudioCtx();
             }
         }
 
-        function playFlipSound() {
-            if (!soundEnabled) return;
-            initAudio();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const now = audioCtx.currentTime;
+        function unlockAllAudio() {
+            initAudioSystem();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            if (!iosMediaUnlocked && htmlAudioPool.length > 0) {
+                const a = htmlAudioPool[0];
+                a.play().then(() => {
+                    a.pause();
+                    a.currentTime = 0;
+                    iosMediaUnlocked = true;
+                }).catch(() => {});
+            }
+        }
 
-            const osc1 = audioCtx.createOscillator();
-            const gain1 = audioCtx.createGain();
-            osc1.type = 'sine';
-            osc1.frequency.setValueAtTime(340, now);
-            osc1.frequency.exponentialRampToValueAtTime(95, now + 0.03);
-            gain1.gain.setValueAtTime(0.08, now);
-            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
-            osc1.connect(gain1);
-            gain1.connect(audioCtx.destination);
-            osc1.start(now);
-            osc1.stop(now + 0.03);
+        ['touchstart', 'touchend', 'pointerdown', 'click'].forEach(evt => {
+            window.addEventListener(evt, unlockAllAudio, { passive: true });
+        });
 
-            const osc2 = audioCtx.createOscillator();
-            const gain2 = audioCtx.createGain();
-            osc2.type = 'triangle';
-            osc2.frequency.setValueAtTime(185, now + 0.21);
-            osc2.frequency.exponentialRampToValueAtTime(42, now + 0.29);
-            gain2.gain.setValueAtTime(0.22, now + 0.21);
-            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.29);
-            osc2.connect(gain2);
-            gain2.connect(audioCtx.destination);
-            osc2.start(now + 0.21);
-            osc2.stop(now + 0.29);
+        function playFlipSound(forceTest = false) {
+            if (!soundEnabled && !forceTest) return;
+            initAudioSystem();
+
+            // 優先透過 HTML5 Audio 播放（iOS 媒體聲道，即使撥靜音鍵也能透過喇叭播放）
+            if (htmlAudioPool.length > 0) {
+                const aud = htmlAudioPool[poolIdx];
+                poolIdx = (poolIdx + 1) % htmlAudioPool.length;
+                aud.currentTime = 0;
+                aud.play().catch(() => {});
+            }
+
+            // 同步使用 Web Audio API 疊加共振低頻
+            if (audioCtx) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                if (audioCtx.state === 'running') {
+                    const now = audioCtx.currentTime;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(220, now + 0.19);
+                    osc.frequency.exponentialRampToValueAtTime(55, now + 0.27);
+                    gain.gain.setValueAtTime(0.35, now + 0.19);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.27);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + 0.19);
+                    osc.stop(now + 0.27);
+                }
+            }
         }
 
         // ==========================================
-        // 3. Canvas 2D 程序化高解析紋理生成 (第一版建築 + 胡桃木基座 + 翻板字卡)
+        // 3. Canvas 2D 程序化高解析紋理生成
         // ==========================================
         function createRoofTileTextures() {
             const width = 512, height = 512;
@@ -495,9 +588,9 @@
         }
 
         // ==========================================
-        // 4. 帝冠式屋頂與建築構件幾何生成器 (100% 保留第一版)
+        // 4. 帝冠式屋頂與建築構件幾何生成器
         // ==========================================
-        function createCurvedHippedRoofGeometry(bottomW, bottomD, topW, topD, height, curveSag = 0.35) {
+        function createCurvedHippedRoofGeometry(bottomW, bottomD, topW, topD, height) {
             const segs = 16;
             const geo = new THREE.BufferGeometry();
             const positions = [];
@@ -784,7 +877,7 @@
 
             const pW = 15.6;
             const pD = 7.8;
-            const pCenterZ = f1CenterZ + f1D * 0.5 + pD * 0.5 - 0.2; // +9.75
+            const pCenterZ = f1CenterZ + f1D * 0.5 + pD * 0.5 - 0.2;
 
             const drivewayMesh = new THREE.Mesh(new THREE.BoxGeometry(pW + 1.8, 0.22, pD + 1.6), darkStonePlinthMat);
             drivewayMesh.position.set(0, 0.11, pCenterZ + 0.2);
@@ -1104,7 +1197,6 @@
             thirdGroup.add(finialGroup);
             stationGroup.add(thirdGroup);
 
-            // 車寄雨遮最前緣 Z 座標: pCenterZ (9.75) + skirtBottomD * 0.5 (5.0) = 14.75
             return {
                 stationGroup,
                 roofOverhangFrontZ: pCenterZ + skirtBottomD * 0.5,
@@ -1297,24 +1389,21 @@
 
             const baseW = 26.2;
             const baseH = 6.8;
-            const frontZ = roofOverhangFrontZ + 0.15; // 向前延伸至車寄雨遮正下方前緣 (Z ≈ 14.9)
+            const frontZ = roofOverhangFrontZ + 0.15;
             const backZ = backEdgeZ - 0.6;
             const baseD = frontZ - backZ;
             const centerZ = (frontZ + backZ) / 2;
 
-            // 1. 底部黃銅鑲邊底框
             const footTrim = new THREE.Mesh(new THREE.BoxGeometry(baseW + 0.5, 0.42, baseD + 0.5), brassMat);
             footTrim.position.set(0, 0.21, centerZ);
             footTrim.receiveShadow = true;
             pedestalGroup.add(footTrim);
 
-            // 2. 底部實木底板
             const bottomSlab = new THREE.Mesh(new THREE.BoxGeometry(baseW, 0.95, baseD), woodMat);
             bottomSlab.position.set(0, 0.42 + 0.475, centerZ);
             bottomSlab.receiveShadow = true;
             pedestalGroup.add(bottomSlab);
 
-            // 3. 頂部承載平台（完整托住車站主體與前突出車寄門廊）
             const topSlabH = 0.78;
             const topSlab = new THREE.Mesh(new THREE.BoxGeometry(baseW, topSlabH, baseD), woodMat);
             topSlab.position.set(0, baseH - topSlabH / 2, centerZ);
@@ -1326,9 +1415,8 @@
             topBrassTrim.position.set(0, baseH - topSlabH - 0.11, centerZ);
             pedestalGroup.add(topBrassTrim);
 
-            // 4. 基座左右兩翼實木墩座與後方主體，在車寄雨遮正下方圍出寬幅玻璃櫥窗展示艙
-            const wallH = baseH - 0.42 - 0.95 - topSlabH - 0.22; // 4.43
-            const wallY = 0.42 + 0.95 + wallH / 2; // 3.585
+            const wallH = baseH - 0.42 - 0.95 - topSlabH - 0.22;
+            const wallY = 0.42 + 0.95 + wallH / 2;
             const winW = 16.8;
             const sideW = (baseW - winW) / 2;
             const chamberDepth = 4.4;
@@ -1351,7 +1439,6 @@
             backWall.receiveShadow = true;
             pedestalGroup.add(backWall);
 
-            // 櫥窗內部深色背板、底板與頂部暖色 LED 燈條（位於雨遮正下方區域）
             const chamberBackZ = frontZ - chamberDepth + 0.05;
             const chamberBack = new THREE.Mesh(new THREE.PlaneGeometry(winW, wallH), chamberMat);
             chamberBack.position.set(0, wallY, chamberBackZ);
@@ -1369,21 +1456,18 @@
             ledStrip.position.set(0, wallY + wallH / 2 - 0.08, frontZ - 1.1);
             pedestalGroup.add(ledStrip);
 
-            // 5. 前移至雨遮正下方玻璃櫥窗內的六位數機械翻板時鐘 (HH:MM:SS)
             const clockZ = frontZ - 2.3;
             clockGroup = new THREE.Group();
             clockGroup.name = 'ChronoFlip_Clock_Unit';
             clockGroup.position.set(0, wallY, clockZ);
             pedestalGroup.add(clockGroup);
 
-            // 中央貫穿黃銅轉軸
             const axleGeo = new THREE.CylinderGeometry(0.055, 0.055, winW - 1.2, 16);
             axleGeo.rotateZ(Math.PI / 2);
             const axle = new THREE.Mesh(axleGeo, brassMat);
             axle.position.set(0, 0, 0.1);
             clockGroup.add(axle);
 
-            // 冒號分隔點
             const dotGeo = new THREE.BoxGeometry(0.22, 0.22, 0.2);
             const dotMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, emissive: 0xd4af37, emissiveIntensity: 0.4 });
             [[-2.42, 0.72], [-2.42, -0.72], [3.38, 0.72], [3.38, -0.72]].forEach(([dx, dy]) => {
@@ -1401,7 +1485,6 @@
                 flipUnits[key] = unit;
             });
 
-            // 6. 基座正面玻璃窗黃銅邊框（齊平車寄雨遮前緣下方）
             const frameT = 0.28;
             const glassZ = frontZ - 0.05;
             const topFrame = new THREE.Mesh(new THREE.BoxGeometry(winW + frameT * 2, frameT, 0.28), brassMat);
@@ -1414,7 +1497,6 @@
             rightFrame.position.set(winW / 2 - frameT / 2, wallY, glassZ);
             pedestalGroup.add(topFrame, botFrame, leftFrame, rightFrame);
 
-            // 7. 透明展示玻璃窗片
             const glassPaneMat = new THREE.MeshPhysicalMaterial({
                 color: 0xe0f2fe,
                 transparent: true,
@@ -1430,7 +1512,6 @@
             glassPane.position.set(0, wallY, glassZ);
             pedestalGroup.add(glassPane);
 
-            // 8. 玻璃窗下方黃銅紀念銘牌
             const plaqueMesh = new THREE.Mesh(
                 new THREE.BoxGeometry(6.2, 0.72, 0.12),
                 new THREE.MeshStandardMaterial({ map: createPlaqueTexture(), roughness: 0.35, metalness: 0.6 })
@@ -1636,7 +1717,6 @@
             gridHelper.material.transparent = true;
             scene.add(gridHelper);
 
-            // 組合完整桌飾：下方延伸基座（正面玻璃窗內嵌翻板時鐘）＋ 上方第一版完整舊高雄車站
             ornamentGroup = new THREE.Group();
             ornamentGroup.name = 'Kaohsiung_Station_Pedestal_Ornament';
             scene.add(ornamentGroup);
@@ -1649,7 +1729,6 @@
             stationGroup.position.set(0, pedInfo.topSurfaceY, 0);
             ornamentGroup.add(stationGroup);
 
-            // 基座玻璃櫥窗內部暖白照明燈
             showcaseLight = new THREE.PointLight('#ffdfa0', 2.2, 16);
             showcaseLight.position.set(0, pedInfo.wallY + 1.4, pedInfo.frontZ - 1.2);
             ornamentGroup.add(showcaseLight);
@@ -1817,6 +1896,18 @@
             soundBtn.addEventListener('click', () => {
                 soundEnabled = !soundEnabled;
                 soundBtn.textContent = soundEnabled ? '🔊 音效: 開' : '🔇 音效: 關';
+                if (soundEnabled) {
+                    unlockAllAudio();
+                    playFlipSound(true);
+                }
+            });
+
+            document.getElementById('test-sound-btn').addEventListener('click', () => {
+                soundEnabled = true;
+                soundBtn.textContent = '🔊 音效: 開';
+                unlockAllAudio();
+                playFlipSound(true);
+                showToast('🔊 機械翻板音效已啟動！');
             });
 
             document.getElementById('export-glb-btn').addEventListener('click', exportToGLB);
