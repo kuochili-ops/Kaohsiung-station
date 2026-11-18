@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>舊高雄車站 (高雄驛) × 翻板時鐘基座桌飾 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #dfe4ea;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.16);
+        }
+        .dark-mode .glass-panel {
+            background: rgba(20, 26, 38, 0.86);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #f3f4f6;
+        }
+        .btn-active {
+            background-color: #1e3a8a !important;
+            color: #ffffff !important;
+            border-color: #1e3a8a !important;
+        }
+        .dark-mode .btn-active {
+            background-color: #3b82f6 !important;
+            border-color: #3b82f6 !important;
+        }
+        input[type="color"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border: none;
+            border-radius: 6px;
+            background: none;
+            cursor: pointer;
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: 1.5px solid rgba(100, 116, 139, 0.5);
+            border-radius: 6px;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body class="transition-colors duration-500">
+
+    <!-- 3D 渲染畫布容器 -->
+    <div id="canvas-container"></div>
+
+    <!-- 左上角建築標題資訊卡 -->
+    <div class="fixed top-4 left-4 z-10 max-w-xs sm:max-w-sm pointer-events-none">
+        <div class="glass-panel rounded-2xl p-3.5 sm:p-4 pointer-events-auto transition-all duration-300">
+            <div class="flex items-center gap-2.5">
+                <span class="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-blue-900 text-white font-bold text-sm shadow-sm">驛</span>
+                <div>
+                    <h1 class="text-sm sm:text-base font-bold tracking-tight leading-tight">舊高雄車站（高雄驛）</h1>
+                    <p class="text-[11px] sm:text-xs opacity-75 mt-0.5">帝冠式建築 × 基座櫥窗翻板時鐘桌飾</p>
+                </div>
+            </div>
+            <div class="mt-2 pt-2 border-t border-gray-400/25 flex items-center justify-between text-xs font-semibold">
+                <span id="hud-date" class="opacity-80">載入日期...</span>
+                <span id="hud-time" class="font-mono tracking-wider text-blue-900 dark:text-amber-300">00:00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右上角可收合控制面板 -->
+    <div class="fixed top-4 right-4 z-10 flex flex-col items-end">
+        <button id="toggle-panel-btn" class="glass-panel rounded-xl px-3.5 py-2 text-xs sm:text-sm font-semibold flex items-center gap-2 hover:scale-105 active:scale-95 transition-all cursor-pointer mb-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+            </svg>
+            <span id="toggle-panel-text">隱藏控制項</span>
+        </button>
+
+        <div id="control-panel" class="glass-panel rounded-2xl p-4 w-72 sm:w-80 space-y-3.5 transition-all duration-300 origin-top-right">
+            <!-- 光影氛圍切換 -->
+            <div>
+                <div class="text-xs font-semibold uppercase tracking-wider opacity-70 mb-1.5 flex items-center justify-between">
+                    <span>光影與時段氛圍</span>
+                    <span id="lighting-badge" class="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">日間陽光</span>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5">
+                    <button data-light="day" class="light-btn btn-active rounded-xl py-1.5 px-2 text-xs font-medium border border-gray-300/60 hover:bg-gray-100/50 transition cursor-pointer flex flex-col items-center gap-0.5">
+                        <span>☀️</span>
+                        <span>日間陽光</span>
+                    </button>
+                    <button data-light="sunset" class="light-btn rounded-xl py-1.5 px-2 text-xs font-medium border border-gray-300/60 hover:bg-gray-100/50 transition cursor-pointer flex flex-col items-center gap-0.5">
+                        <span>🌇</span>
+                        <span>黃昏暖陽</span>
+                    </button>
+                    <button data-light="night" class="light-btn rounded-xl py-1.5 px-2 text-xs font-medium border border-gray-300/60 hover:bg-gray-100/50 transition cursor-pointer flex flex-col items-center gap-0.5">
+                        <span>🌙</span>
+                        <span>夜間點燈</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 視角預設 -->
+            <div>
+                <div class="text-xs font-semibold uppercase tracking-wider opacity-70 mb-1.5">建築與櫥窗視角</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button data-cam="iso" class="cam-btn btn-active rounded-xl py-1.5 px-2.5 text-xs font-medium border border-gray-300/60 hover:bg-gray-100/50 transition cursor-pointer text-left flex items-center gap-1.5">
+                        <span>🏛️</span><span>經典斜視角</span>
+                    </button>
+                    <button data-cam="front" class="cam-btn rounded-xl py-1.5 px-2.5 text-xs font-medium border border-gray-300/60 hover:bg-gray-100/50 transition cursor-pointer text-left flex items-center gap-1.5">
+                        <span>🚏</span><span>正面車寄櫥窗</span>
+                    </button>
+                    <button data-cam="clock" class="cam-btn rounded-xl py-1.5 px-2.5 text-xs font-medium border border-gray-300/60 hover:bg-gray-100/50 transition cursor-pointer text-left flex items-center gap-1.5">
+                        <span>⏱️</span><span>翻板時鐘特寫</span>
+                    </button>
+                    <button id="auto-rotate-btn" class="rounded-xl py-1.5 px-2.5 text-xs font-medium border border-gray-300/60 hover:bg-gray-100/50 transition cursor-pointer text-left flex items-center gap-1.5">
+                        <span>🔄</span><span id="rotate-label">自動旋轉：關</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 翻板時鐘配色與音效 -->
+            <div>
+                <div class="text-xs font-semibold uppercase tracking-wider opacity-70 mb-1.5">翻板時鐘設定</div>
+                <div class="flex items-center justify-between gap-2 bg-black/5 rounded-xl px-3 py-2">
+                    <label class="flex items-center gap-1.5 text-xs font-medium cursor-pointer">
+                        <span>字色</span>
+                        <input type="color" id="text-color-picker" value="#f8fafc">
+                    </label>
+                    <label class="flex items-center gap-1.5 text-xs font-medium cursor-pointer">
+                        <span>底色</span>
+                        <input type="color" id="bg-color-picker" value="#1e293b">
+                    </label>
+                    <button id="sound-toggle-btn" class="rounded-lg px-2.5 py-1 text-xs font-semibold bg-white/80 dark:bg-slate-800 border border-gray-300/60 cursor-pointer">
+                        🔊 音效: 開
+                    </button>
+                </div>
+            </div>
+
+            <!-- 模型匯出按鈕 -->
+            <div class="pt-1 border-t border-gray-300/40">
+                <button id="export-glb-btn" class="w-full rounded-xl py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-md transition-all cursor-pointer flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    <span>匯出 .GLB 3D 桌飾模型</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部操作提示與狀態訊息框 -->
+    <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center gap-2 w-max max-w-[92vw]">
+        <div id="toast-msg" class="hidden glass-panel rounded-full px-4 py-2 text-xs font-semibold text-emerald-700 shadow-lg transition-all duration-300"></div>
+        <div class="glass-panel rounded-full px-4 py-1.5 text-[11px] opacity-80 pointer-events-auto">
+            左鍵拖曳旋轉 · 滾輪縮放 · 右鍵平移
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+        // ==========================================
+        // 1. 全域變數與狀態
+        // ==========================================
+        let scene, camera, renderer, controls;
+        let ornamentGroup, stationGroup, pedestalGroup, clockGroup;
+        let signMeshes = [], windowMaterials = [];
+        let dirLight, hemiLight, ambientLight, porticoLights = [], showcaseLight;
+        let isAutoRotating = false;
+
+        let targetCamPos = null;
+        let targetLookAt = null;
+
+        // 翻板時鐘狀態
+        const flipUnits = {};
+        const textureCache = {};
+        let customTextColor = '#f8fafc';
+        let customCardBgColor = '#1e293b';
+        let soundEnabled = true;
+        let audioCtx = null;
+
+        function showToast(text, isError = false) {
+            const toast = document.getElementById('toast-msg');
+            toast.textContent = text;
+            toast.className = `glass-panel rounded-full px-4 py-2 text-xs font-semibold shadow-lg transition-all duration-300 ${
+                isError ? 'text-red-600' : 'text-emerald-700'
+            }`;
+            toast.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3500);
+        }
+
+        // ==========================================
+        // 2. 雙脈衝機械翻頁音效 (Web Audio API)
+        // ==========================================
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playFlipSound() {
+            if (!soundEnabled) return;
+            initAudio();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const now = audioCtx.currentTime;
+
+            const osc1 = audioCtx.createOscillator();
+            const gain1 = audioCtx.createGain();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(340, now);
+            osc1.frequency.exponentialRampToValueAtTime(95, now + 0.03);
+            gain1.gain.setValueAtTime(0.08, now);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+            osc1.connect(gain1);
+            gain1.connect(audioCtx.destination);
+            osc1.start(now);
+            osc1.stop(now + 0.03);
+
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(185, now + 0.21);
+            osc2.frequency.exponentialRampToValueAtTime(42, now + 0.29);
+            gain2.gain.setValueAtTime(0.22, now + 0.21);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.29);
+            osc2.connect(gain2);
+            gain2.connect(audioCtx.destination);
+            osc2.start(now + 0.21);
+            osc2.stop(now + 0.29);
+        }
+
+        // ==========================================
+        // 3. Canvas 2D 程序化高解析紋理生成 (第一版建築 + 胡桃木基座 + 翻板字卡)
+        // ==========================================
+        function createRoofTileTextures() {
+            const width = 512, height = 512;
+            const colorCanvas = document.createElement('canvas');
+            colorCanvas.width = width;
+            colorCanvas.height = height;
+            const ctx = colorCanvas.getContext('2d');
+
+            const bumpCanvas = document.createElement('canvas');
+            bumpCanvas.width = width;
+            bumpCanvas.height = height;
+            const bCtx = bumpCanvas.getContext('2d');
+
+            ctx.fillStyle = '#383b40';
+            ctx.fillRect(0, 0, width, height);
+            bCtx.fillStyle = '#606060';
+            bCtx.fillRect(0, 0, width, height);
+
+            const cols = 16;
+            const rows = 16;
+            const colW = width / cols;
+            const rowH = height / rows;
+
+            for (let r = 0; r < rows; r++) {
+                const y = r * rowH;
+                const grad = ctx.createLinearGradient(0, y, 0, y + rowH);
+                grad.addColorStop(0, 'rgba(20, 22, 25, 0.75)');
+                grad.addColorStop(0.2, 'rgba(65, 69, 75, 0.25)');
+                grad.addColorStop(0.85, 'rgba(50, 53, 58, 0.1)');
+                grad.addColorStop(1, 'rgba(15, 17, 20, 0.85)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, y, width, rowH);
+
+                const bGrad = bCtx.createLinearGradient(0, y, 0, y + rowH);
+                bGrad.addColorStop(0, '#202020');
+                bGrad.addColorStop(0.25, '#c8c8c8');
+                bGrad.addColorStop(0.9, '#888888');
+                bGrad.addColorStop(1, '#181818');
+                bCtx.fillStyle = bGrad;
+                bCtx.fillRect(0, y, width, rowH);
+            }
+
+            for (let c = 0; c < cols; c++) {
+                const x = c * colW;
+                const cGrad = ctx.createLinearGradient(x, 0, x + colW, 0);
+                cGrad.addColorStop(0, 'rgba(15, 16, 18, 0.65)');
+                cGrad.addColorStop(0.45, 'rgba(85, 90, 98, 0.35)');
+                cGrad.addColorStop(0.55, 'rgba(85, 90, 98, 0.35)');
+                cGrad.addColorStop(1, 'rgba(15, 16, 18, 0.65)');
+                ctx.fillStyle = cGrad;
+                ctx.fillRect(x, 0, colW, height);
+
+                const bcGrad = bCtx.createLinearGradient(x, 0, x + colW, 0);
+                bcGrad.addColorStop(0, '#222222');
+                bcGrad.addColorStop(0.5, '#ffffff');
+                bcGrad.addColorStop(1, '#222222');
+                bCtx.globalAlpha = 0.55;
+                bCtx.fillStyle = bcGrad;
+                bCtx.fillRect(x, 0, colW, height);
+                bCtx.globalAlpha = 1.0;
+            }
+
+            for (let i = 0; i < 4000; i++) {
+                const nx = Math.random() * width;
+                const ny = Math.random() * height;
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.05)';
+                ctx.fillRect(nx, ny, 2, 2);
+            }
+
+            const map = new THREE.CanvasTexture(colorCanvas);
+            map.wrapS = map.wrapT = THREE.RepeatWrapping;
+            map.repeat.set(4, 3);
+            map.colorSpace = THREE.SRGBColorSpace;
+
+            const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+            bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+            bumpMap.repeat.set(4, 3);
+
+            return { map, bumpMap };
+        }
+
+        function createSignboardTexture(char) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 384;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#c5c9d1';
+            ctx.fillRect(0, 0, 256, 384);
+
+            ctx.fillStyle = '#243665';
+            ctx.fillRect(14, 14, 228, 300);
+
+            ctx.fillStyle = '#f4f5f7';
+            ctx.fillRect(14, 314, 228, 22);
+            ctx.fillStyle = '#b93838';
+            ctx.fillRect(14, 336, 228, 34);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(22, 22, 212, 284);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '900 165px "Noto Sans TC", "Microsoft JhengHei", serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 4;
+            ctx.fillText(char, 128, 168);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.anisotropy = 8;
+            return tex;
+        }
+
+        function createWindowTexture(cols = 2, rows = 4, isArched = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            const glassGrad = ctx.createLinearGradient(0, 0, 256, 512);
+            glassGrad.addColorStop(0, '#2a3442');
+            glassGrad.addColorStop(0.5, '#3b4859');
+            glassGrad.addColorStop(1, '#1e2631');
+            ctx.fillStyle = glassGrad;
+            ctx.fillRect(0, 0, 256, 512);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.beginPath();
+            ctx.moveTo(0, 120);
+            ctx.lineTo(256, 40);
+            ctx.lineTo(256, 110);
+            ctx.lineTo(0, 190);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = '#3d332a';
+            ctx.lineWidth = 18;
+            ctx.strokeRect(9, 9, 238, 494);
+
+            ctx.lineWidth = 8;
+            const cellW = 238 / cols;
+            const cellH = 494 / rows;
+
+            for (let c = 1; c < cols; c++) {
+                ctx.beginPath();
+                ctx.moveTo(9 + c * cellW, 9);
+                ctx.lineTo(9 + c * cellW, 503);
+                ctx.stroke();
+            }
+            for (let r = 1; r < rows; r++) {
+                ctx.beginPath();
+                ctx.moveTo(9, 9 + r * cellH);
+                ctx.lineTo(247, 9 + r * cellH);
+                ctx.stroke();
+            }
+
+            if (isArched) {
+                ctx.beginPath();
+                ctx.arc(128, 128, 110, Math.PI, 0);
+                ctx.lineWidth = 10;
+                ctx.stroke();
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        function createStuccoTexture(baseHex) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = baseHex;
+            ctx.fillRect(0, 0, 256, 256);
+
+            for (let i = 0; i < 3500; i++) {
+                const x = Math.random() * 256;
+                const y = Math.random() * 256;
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)';
+                ctx.fillRect(x, y, 2, 2);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(3, 2);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        function createWalnutWoodTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#3c2415';
+            ctx.fillRect(0, 0, 512, 512);
+            for (let i = 0; i < 160; i++) {
+                ctx.fillStyle = i % 2 === 0 ? 'rgba(22, 11, 4, 0.32)' : 'rgba(92, 58, 35, 0.24)';
+                ctx.fillRect(0, i * 3.2, 512, 1.5 + Math.random() * 2.2);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(2, 2);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        function createPlaqueTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 110;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#1b150f';
+            ctx.fillRect(0, 0, 640, 110);
+            ctx.strokeStyle = '#d4af37';
+            ctx.lineWidth = 7;
+            ctx.strokeRect(7, 7, 626, 96);
+
+            ctx.fillStyle = '#f5d47a';
+            ctx.font = 'bold 40px "Noto Sans TC", "Microsoft JhengHei", serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('高雄驛 · CHRONOFLIP 1941', 320, 56);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        // ==========================================
+        // 4. 帝冠式屋頂與建築構件幾何生成器 (100% 保留第一版)
+        // ==========================================
+        function createCurvedHippedRoofGeometry(bottomW, bottomD, topW, topD, height, curveSag = 0.35) {
+            const segs = 16;
+            const geo = new THREE.BufferGeometry();
+            const positions = [];
+            const uvs = [];
+            const indices = [];
+
+            for (let i = 0; i <= segs; i++) {
+                const t = i / segs;
+                const w = THREE.MathUtils.lerp(bottomW, topW, t);
+                const d = THREE.MathUtils.lerp(bottomD, topD, t);
+
+                const curvedT = Math.pow(t, 1.38);
+                const y = curvedT * height;
+
+                const hw = w * 0.5;
+                const hd = d * 0.5;
+
+                const corners = [
+                    [-hw, y,  hd],
+                    [ hw, y,  hd],
+                    [ hw, y, -hd],
+                    [-hw, y, -hd]
+                ];
+
+                const cornerLift = (1 - t) * (1 - t) * (height * 0.085);
+
+                for (let c = 0; c < 4; c++) {
+                    positions.push(corners[c][0], corners[c][1] + cornerLift, corners[c][2]);
+                    uvs.push(c % 2 === 0 ? 0 : 1, t);
+                }
+            }
+
+            for (let i = 0; i < segs; i++) {
+                const rowA = i * 4;
+                const rowB = (i + 1) * 4;
+                for (let side = 0; side < 4; side++) {
+                    const nextSide = (side + 1) % 4;
+                    const a0 = rowA + side;
+                    const a1 = rowA + nextSide;
+                    const b0 = rowB + side;
+                    const b1 = rowB + nextSide;
+
+                    indices.push(a0, a1, b1);
+                    indices.push(a0, b1, b0);
+                }
+            }
+
+            if (topW > 0.01 && topD > 0.01) {
+                const topRow = segs * 4;
+                indices.push(topRow + 0, topRow + 1, topRow + 2);
+                indices.push(topRow + 0, topRow + 2, topRow + 3);
+            }
+
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            geo.setIndex(indices);
+            geo.computeVertexNormals();
+            return geo;
+        }
+
+        function buildKarahafuGable(roofMat, trimMat, wallMat, goldAccentMat) {
+            const group = new THREE.Group();
+
+            const span = 3.6;
+            const peakH = 2.05;
+            const depth = 2.6;
+
+            const shape = new THREE.Shape();
+            shape.moveTo(-span, 0);
+            shape.bezierCurveTo(-span * 0.65, 0.05, -span * 0.42, peakH * 0.92, 0, peakH);
+            shape.bezierCurveTo(span * 0.42, peakH * 0.92, span * 0.65, 0.05, span, 0);
+            shape.lineTo(span * 0.86, -0.18);
+            shape.bezierCurveTo(span * 0.45, -0.1, span * 0.35, peakH * 0.66, 0, peakH * 0.72);
+            shape.bezierCurveTo(-span * 0.35, peakH * 0.66, -span * 0.45, -0.1, -span * 0.86, -0.18);
+            shape.closePath();
+
+            const bargeGeo = new THREE.ExtrudeGeometry(shape, {
+                depth: depth,
+                bevelEnabled: true,
+                bevelThickness: 0.08,
+                bevelSize: 0.06,
+                bevelSegments: 3
+            });
+            const bargeMesh = new THREE.Mesh(bargeGeo, trimMat);
+            bargeMesh.position.z = -depth * 0.5;
+            bargeMesh.castShadow = true;
+            bargeMesh.receiveShadow = true;
+            group.add(bargeMesh);
+
+            const roofShape = new THREE.Shape();
+            const rSpan = span + 0.25;
+            const rPeak = peakH + 0.28;
+            roofShape.moveTo(-rSpan, 0.05);
+            roofShape.bezierCurveTo(-rSpan * 0.65, 0.12, -rSpan * 0.42, rPeak * 0.92, 0, rPeak);
+            roofShape.bezierCurveTo(rSpan * 0.42, rPeak * 0.92, rSpan * 0.65, 0.12, rSpan, 0.05);
+            roofShape.lineTo(span, -0.02);
+            roofShape.bezierCurveTo(span * 0.65, 0.04, span * 0.42, peakH * 0.92, 0, peakH);
+            roofShape.bezierCurveTo(-span * 0.42, peakH * 0.92, -span * 0.65, 0.04, -span, -0.02);
+            roofShape.closePath();
+
+            const roofGeo = new THREE.ExtrudeGeometry(roofShape, {
+                depth: depth + 0.35,
+                bevelEnabled: false
+            });
+            const roofMesh = new THREE.Mesh(roofGeo, roofMat);
+            roofMesh.position.z = -(depth + 0.35) * 0.5 + 0.12;
+            roofMesh.castShadow = true;
+            roofMesh.receiveShadow = true;
+            group.add(roofMesh);
+
+            const innerWallShape = new THREE.Shape();
+            innerWallShape.moveTo(-span * 0.85, -0.15);
+            innerWallShape.bezierCurveTo(-span * 0.45, -0.08, -span * 0.35, peakH * 0.66, 0, peakH * 0.72);
+            innerWallShape.bezierCurveTo(span * 0.35, peakH * 0.66, span * 0.45, -0.08, span * 0.85, -0.15);
+            innerWallShape.lineTo(span * 0.85, -0.35);
+            innerWallShape.lineTo(-span * 0.85, -0.35);
+            innerWallShape.closePath();
+
+            const innerGeo = new THREE.ExtrudeGeometry(innerWallShape, { depth: depth - 0.25, bevelEnabled: false });
+            const innerMesh = new THREE.Mesh(innerGeo, wallMat);
+            innerMesh.position.z = -(depth - 0.25) * 0.5;
+            group.add(innerMesh);
+
+            const medallionGeo = new THREE.CylinderGeometry(0.45, 0.5, 0.2, 24);
+            medallionGeo.rotateX(Math.PI / 2);
+            const medallion = new THREE.Mesh(medallionGeo, goldAccentMat);
+            medallion.position.set(0, peakH * 0.36, depth * 0.5 + 0.05);
+            group.add(medallion);
+
+            const ridgeGeo = new THREE.BoxGeometry(0.28, 0.32, depth + 0.45);
+            const ridgeMesh = new THREE.Mesh(ridgeGeo, roofMat);
+            ridgeMesh.position.set(0, rPeak + 0.08, 0.12);
+            ridgeMesh.castShadow = true;
+            group.add(ridgeMesh);
+
+            const oniGeo = new THREE.CylinderGeometry(0.14, 0.24, 0.42, 8);
+            const oniMesh = new THREE.Mesh(oniGeo, roofMat);
+            oniMesh.position.set(0, rPeak + 0.28, depth * 0.5 + 0.22);
+            group.add(oniMesh);
+
+            return group;
+        }
+
+        // ==========================================
+        // 5. 建構第一版完整舊高雄車站 3D 模型
+        // ==========================================
+        function buildKaohsiungStationModel() {
+            stationGroup = new THREE.Group();
+            stationGroup.name = 'Kaohsiung_Old_Station';
+
+            const tileTextures = createRoofTileTextures();
+            const roofTileMat = new THREE.MeshStandardMaterial({
+                map: tileTextures.map,
+                bumpMap: tileTextures.bumpMap,
+                bumpScale: 0.08,
+                roughness: 0.72,
+                metalness: 0.12
+            });
+
+            const creamWallMat = new THREE.MeshStandardMaterial({
+                map: createStuccoTexture('#f2ede2'),
+                roughness: 0.85,
+                metalness: 0.02
+            });
+
+            const ochreWainscotMat = new THREE.MeshStandardMaterial({
+                map: createStuccoTexture('#d8b168'),
+                roughness: 0.82,
+                metalness: 0.02
+            });
+
+            const sandstoneTrimMat = new THREE.MeshStandardMaterial({
+                map: createStuccoTexture('#e6d2b5'),
+                roughness: 0.78,
+                metalness: 0.04
+            });
+
+            const thirdFloorBlueMat = new THREE.MeshStandardMaterial({
+                map: createStuccoTexture('#b8c7d4'),
+                roughness: 0.8,
+                metalness: 0.05
+            });
+
+            const darkStonePlinthMat = new THREE.MeshStandardMaterial({
+                color: '#46494f',
+                roughness: 0.9,
+                metalness: 0.05
+            });
+
+            const flatRoofDeckMat = new THREE.MeshStandardMaterial({
+                color: '#34373c',
+                roughness: 0.88,
+                metalness: 0.05
+            });
+
+            const rectWinMat = new THREE.MeshStandardMaterial({
+                map: createWindowTexture(2, 4, false),
+                roughness: 0.25,
+                metalness: 0.3,
+                emissive: new THREE.Color('#ffaa33'),
+                emissiveIntensity: 0.0
+            });
+            const archedWinMat = new THREE.MeshStandardMaterial({
+                map: createWindowTexture(2, 5, true),
+                roughness: 0.25,
+                metalness: 0.3,
+                emissive: new THREE.Color('#ffaa33'),
+                emissiveIntensity: 0.0
+            });
+            const clerestoryWinMat = new THREE.MeshStandardMaterial({
+                map: createWindowTexture(3, 3, false),
+                roughness: 0.25,
+                metalness: 0.3,
+                emissive: new THREE.Color('#ffaa33'),
+                emissiveIntensity: 0.0
+            });
+            windowMaterials.push(rectWinMat, archedWinMat, clerestoryWinMat);
+
+            // A. 一樓主體基座
+            const baseGroup = new THREE.Group();
+            baseGroup.name = 'First_Floor_Base';
+
+            const f1W = 24.0;
+            const f1D = 16.5;
+            const f1H = 4.6;
+            const f1CenterZ = -2.2;
+
+            const plinthMesh = new THREE.Mesh(new THREE.BoxGeometry(f1W + 0.5, 0.35, f1D + 0.5), darkStonePlinthMat);
+            plinthMesh.position.set(0, 0.175, f1CenterZ);
+            plinthMesh.receiveShadow = true;
+            baseGroup.add(plinthMesh);
+
+            const wainscotH = 1.15;
+            const wainscotMesh = new THREE.Mesh(new THREE.BoxGeometry(f1W + 0.12, wainscotH, f1D + 0.12), ochreWainscotMat);
+            wainscotMesh.position.set(0, 0.35 + wainscotH * 0.5, f1CenterZ);
+            wainscotMesh.castShadow = true;
+            wainscotMesh.receiveShadow = true;
+            baseGroup.add(wainscotMesh);
+
+            const upperWallH = f1H - wainscotH;
+            const f1WallMesh = new THREE.Mesh(new THREE.BoxGeometry(f1W, upperWallH, f1D), creamWallMat);
+            f1WallMesh.position.set(0, 0.35 + wainscotH + upperWallH * 0.5, f1CenterZ);
+            f1WallMesh.castShadow = true;
+            f1WallMesh.receiveShadow = true;
+            baseGroup.add(f1WallMesh);
+
+            const f1RoofMesh = new THREE.Mesh(new THREE.BoxGeometry(f1W + 0.7, 0.35, f1D + 0.7), flatRoofDeckMat);
+            f1RoofMesh.position.set(0, 0.35 + f1H + 0.175, f1CenterZ);
+            f1RoofMesh.castShadow = true;
+            f1RoofMesh.receiveShadow = true;
+            baseGroup.add(f1RoofMesh);
+
+            const f1WinGeo = new THREE.BoxGeometry(0.15, 2.25, 1.15);
+            const sideWinZPositions = [-8.2, -6.2, -4.2, -0.2, 1.8, 3.8];
+            sideWinZPositions.forEach((wz) => {
+                const winR = new THREE.Mesh(f1WinGeo, rectWinMat);
+                winR.position.set(f1W * 0.5 + 0.02, 2.75, wz);
+                baseGroup.add(winR);
+
+                const winL = new THREE.Mesh(f1WinGeo, rectWinMat);
+                winL.position.set(-f1W * 0.5 - 0.02, 2.75, wz);
+                baseGroup.add(winL);
+            });
+
+            const sideDoorZ = -2.2;
+            const sideDoorMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.7, 1.3), rectWinMat);
+            sideDoorMesh.position.set(f1W * 0.5 + 0.03, 1.85, sideDoorZ);
+            baseGroup.add(sideDoorMesh);
+
+            const sideCanopy = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.18, 1.9), flatRoofDeckMat);
+            sideCanopy.position.set(f1W * 0.5 + 0.5, 3.35, sideDoorZ);
+            sideCanopy.castShadow = true;
+            baseGroup.add(sideCanopy);
+
+            const sideStep = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.35, 1.7), darkStonePlinthMat);
+            sideStep.position.set(f1W * 0.5 + 0.45, 0.175, sideDoorZ);
+            baseGroup.add(sideStep);
+
+            stationGroup.add(baseGroup);
+
+            // B. 前側車寄門廊 (Front Portico / 雨遮)
+            const porticoGroup = new THREE.Group();
+            porticoGroup.name = 'Front_Portico';
+
+            const pW = 15.6;
+            const pD = 7.8;
+            const pCenterZ = f1CenterZ + f1D * 0.5 + pD * 0.5 - 0.2; // +9.75
+
+            const drivewayMesh = new THREE.Mesh(new THREE.BoxGeometry(pW + 1.8, 0.22, pD + 1.6), darkStonePlinthMat);
+            drivewayMesh.position.set(0, 0.11, pCenterZ + 0.2);
+            drivewayMesh.receiveShadow = true;
+            porticoGroup.add(drivewayMesh);
+
+            const pillarH = 3.2;
+            const pillarW = 0.85;
+            const pillarD = 0.85;
+            const pillarXCoords = [-6.3, -2.1, 2.1, 6.3];
+            const frontPillarZ = pCenterZ + pD * 0.5 - 0.75;
+            const backPillarZ = f1CenterZ + f1D * 0.5 + 0.35;
+
+            pillarXCoords.forEach((px) => {
+                const pFront = new THREE.Mesh(new THREE.BoxGeometry(pillarW, pillarH, pillarD), sandstoneTrimMat);
+                pFront.position.set(px, 0.22 + pillarH * 0.5, frontPillarZ);
+                pFront.castShadow = true;
+                pFront.receiveShadow = true;
+                porticoGroup.add(pFront);
+
+                const baseCap = new THREE.Mesh(new THREE.BoxGeometry(pillarW + 0.16, 0.35, pillarD + 0.16), ochreWainscotMat);
+                baseCap.position.set(px, 0.22 + 0.175, frontPillarZ);
+                porticoGroup.add(baseCap);
+
+                const pBack = new THREE.Mesh(new THREE.BoxGeometry(pillarW, pillarH, pillarD), sandstoneTrimMat);
+                pBack.position.set(px, 0.22 + pillarH * 0.5, backPillarZ);
+                pBack.castShadow = true;
+                porticoGroup.add(pBack);
+            });
+
+            const mainEntranceGlass = new THREE.Mesh(new THREE.BoxGeometry(11.5, 3.0, 0.25), rectWinMat);
+            mainEntranceGlass.position.set(0, 1.85, f1CenterZ + f1D * 0.5 + 0.02);
+            porticoGroup.add(mainEntranceGlass);
+
+            const skirtBottomW = pW + 2.4;
+            const skirtBottomD = pD + 2.2;
+            const skirtTopW = pW - 1.4;
+            const skirtTopD = pD - 1.2;
+            const skirtH = 1.45;
+
+            const porticoSkirtGeo = createCurvedHippedRoofGeometry(
+                skirtBottomW, skirtBottomD,
+                skirtTopW, skirtTopD,
+                skirtH, 0.25
+            );
+            const porticoSkirtMesh = new THREE.Mesh(porticoSkirtGeo, roofTileMat);
+            porticoSkirtMesh.position.set(0, 0.22 + pillarH, pCenterZ);
+            porticoSkirtMesh.castShadow = true;
+            porticoSkirtMesh.receiveShadow = true;
+            porticoGroup.add(porticoSkirtMesh);
+
+            const deckY = 0.22 + pillarH + skirtH;
+            const parapetH = 0.82;
+            const parapetBox = new THREE.Mesh(new THREE.BoxGeometry(skirtTopW - 0.1, parapetH, skirtTopD - 0.1), creamWallMat);
+            parapetBox.position.set(0, deckY + parapetH * 0.5, pCenterZ);
+            parapetBox.castShadow = true;
+            parapetBox.receiveShadow = true;
+            porticoGroup.add(parapetBox);
+
+            const parapetCap = new THREE.Mesh(new THREE.BoxGeometry(skirtTopW + 0.35, 0.22, skirtTopD + 0.35), flatRoofDeckMat);
+            parapetCap.position.set(0, deckY + parapetH + 0.11, pCenterZ);
+            parapetCap.castShadow = true;
+            parapetCap.receiveShadow = true;
+            porticoGroup.add(parapetCap);
+
+            // C. 「高」「雄」「車」「站」四座獨立直立燈箱立牌
+            const signsGroup = new THREE.Group();
+            signsGroup.name = 'Kaohsiung_Station_Signs';
+            const chars = ['高', '雄', '車', '站'];
+            const signXCoords = [-4.65, -1.55, 1.55, 4.65];
+            const signW = 1.42;
+            const signH = 2.05;
+            const signD = 0.32;
+            const signBaseY = deckY + parapetH + 0.22;
+            const signZ = pCenterZ + skirtTopD * 0.5 - 0.35;
+
+            const signSideMat = new THREE.MeshStandardMaterial({
+                color: '#b8bec9',
+                roughness: 0.4,
+                metalness: 0.6
+            });
+
+            chars.forEach((ch, idx) => {
+                const faceTex = createSignboardTexture(ch);
+                const faceMat = new THREE.MeshStandardMaterial({
+                    map: faceTex,
+                    roughness: 0.35,
+                    metalness: 0.1,
+                    emissive: new THREE.Color('#dbeafe'),
+                    emissiveMap: faceTex,
+                    emissiveIntensity: 0.0
+                });
+
+                const materials = [
+                    signSideMat, signSideMat,
+                    signSideMat, signSideMat,
+                    faceMat, faceMat
+                ];
+
+                const signMesh = new THREE.Mesh(new THREE.BoxGeometry(signW, signH, signD), materials);
+                signMesh.position.set(signXCoords[idx], signBaseY + signH * 0.5 + 0.12, signZ);
+                signMesh.castShadow = true;
+                signsGroup.add(signMesh);
+                signMeshes.push(faceMat);
+
+                [-0.45, 0.45].forEach((legOffset) => {
+                    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.45), signSideMat);
+                    leg.position.set(signXCoords[idx] + legOffset, signBaseY + 0.06, signZ);
+                    signsGroup.add(leg);
+                });
+            });
+            porticoGroup.add(signsGroup);
+
+            [-3.5, 3.5].forEach((lx) => {
+                const pLight = new THREE.PointLight('#ffbe6b', 0, 12);
+                pLight.position.set(lx, 3.1, pCenterZ);
+                porticoGroup.add(pLight);
+                porticoLights.push(pLight);
+            });
+
+            stationGroup.add(porticoGroup);
+
+            // D. 二樓主體與唐博風入口立面
+            const secondGroup = new THREE.Group();
+            secondGroup.name = 'Second_Floor_Main';
+
+            const f2BaseY = 0.35 + f1H + 0.35;
+            const f2W = 16.4;
+            const f2D = 12.6;
+            const f2H = 4.35;
+            const f2CenterZ = f1CenterZ + 0.4;
+
+            const f2WallMesh = new THREE.Mesh(new THREE.BoxGeometry(f2W, f2H, f2D), creamWallMat);
+            f2WallMesh.position.set(0, f2BaseY + f2H * 0.5, f2CenterZ);
+            f2WallMesh.castShadow = true;
+            f2WallMesh.receiveShadow = true;
+            secondGroup.add(f2WallMesh);
+
+            const frontFrameW = 8.4;
+            const frontFrameD = 0.55;
+            const frontFrameMesh = new THREE.Mesh(new THREE.BoxGeometry(frontFrameW, f2H - 0.1, frontFrameD), sandstoneTrimMat);
+            frontFrameMesh.position.set(0, f2BaseY + f2H * 0.5, f2CenterZ + f2D * 0.5 + 0.15);
+            frontFrameMesh.castShadow = true;
+            frontFrameMesh.receiveShadow = true;
+            secondGroup.add(frontFrameMesh);
+
+            const f2FrontZ = f2CenterZ + f2D * 0.5 + 0.44;
+            const centerBayWin = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.75, 0.15), rectWinMat);
+            centerBayWin.position.set(0, f2BaseY + 1.85, f2FrontZ);
+            secondGroup.add(centerBayWin);
+
+            [-2.55, 2.55].forEach((wx) => {
+                const sideBayWin = new THREE.Mesh(new THREE.BoxGeometry(1.35, 2.75, 0.15), rectWinMat);
+                sideBayWin.position.set(wx, f2BaseY + 1.85, f2FrontZ);
+                secondGroup.add(sideBayWin);
+            });
+
+            [-6.1, 6.1].forEach((ox) => {
+                const octGroup = new THREE.Group();
+                octGroup.position.set(ox, f2BaseY + 2.35, f2CenterZ + f2D * 0.5 + 0.08);
+
+                const outerOctGeo = new THREE.CylinderGeometry(0.88, 0.88, 0.24, 8);
+                outerOctGeo.rotateX(Math.PI / 2);
+                outerOctGeo.rotateZ(Math.PI / 8);
+                const outerOct = new THREE.Mesh(outerOctGeo, sandstoneTrimMat);
+                octGroup.add(outerOct);
+
+                const glassOctGeo = new THREE.CylinderGeometry(0.62, 0.62, 0.28, 8);
+                glassOctGeo.rotateX(Math.PI / 2);
+                glassOctGeo.rotateZ(Math.PI / 8);
+                const glassOct = new THREE.Mesh(glassOctGeo, rectWinMat);
+                octGroup.add(glassOct);
+
+                secondGroup.add(octGroup);
+            });
+
+            const f2SideZ = [-5.8, -3.1, -0.4, 2.3];
+            f2SideZ.forEach((sz) => {
+                [-1, 1].forEach((dir) => {
+                    const wx = dir * (f2W * 0.5 + 0.04);
+                    const archBody = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.3, 1.15), archedWinMat);
+                    archBody.position.set(wx, f2BaseY + 1.75, sz);
+                    secondGroup.add(archBody);
+
+                    const archTopGeo = new THREE.CylinderGeometry(0.575, 0.575, 0.16, 16, 1, false, 0, Math.PI);
+                    archTopGeo.rotateZ(Math.PI / 2);
+                    archTopGeo.rotateY(dir > 0 ? 0 : Math.PI);
+                    const archTop = new THREE.Mesh(archTopGeo, archedWinMat);
+                    archTop.position.set(wx, f2BaseY + 2.9, sz);
+                    secondGroup.add(archTop);
+                });
+            });
+
+            const f2EaveH = 0.65;
+            const f2EaveGeo = createCurvedHippedRoofGeometry(
+                f2W + 1.5, f2D + 1.5,
+                f2W + 0.1, f2D + 0.1,
+                f2EaveH, 0.15
+            );
+            const f2EaveMesh = new THREE.Mesh(f2EaveGeo, roofTileMat);
+            f2EaveMesh.position.set(0, f2BaseY + f2H - 0.15, f2CenterZ);
+            f2EaveMesh.castShadow = true;
+            f2EaveMesh.receiveShadow = true;
+            secondGroup.add(f2EaveMesh);
+
+            const f2DeckMesh = new THREE.Mesh(new THREE.BoxGeometry(f2W + 0.1, 0.25, f2D + 0.1), flatRoofDeckMat);
+            f2DeckMesh.position.set(0, f2BaseY + f2H + f2EaveH - 0.1, f2CenterZ);
+            f2DeckMesh.receiveShadow = true;
+            secondGroup.add(f2DeckMesh);
+
+            const karahafu = buildKarahafuGable(
+                roofTileMat,
+                sandstoneTrimMat,
+                creamWallMat,
+                ochreWainscotMat
+            );
+            karahafu.position.set(0, f2BaseY + f2H - 0.25, f2CenterZ + f2D * 0.5 + 0.35);
+            secondGroup.add(karahafu);
+
+            stationGroup.add(secondGroup);
+
+            // E. 三樓採光塔樓與帝冠式四角攢尖大屋頂
+            const thirdGroup = new THREE.Group();
+            thirdGroup.name = 'Third_Floor_Imperial_Crown';
+
+            const f3BaseY = f2BaseY + f2H + f2EaveH;
+            const f3W = 10.8;
+            const f3D = 9.2;
+            const f3H = 2.65;
+            const f3CenterZ = f2CenterZ - 0.25;
+
+            const f3WallMesh = new THREE.Mesh(new THREE.BoxGeometry(f3W, f3H, f3D), thirdFloorBlueMat);
+            f3WallMesh.position.set(0, f3BaseY + f3H * 0.5, f3CenterZ);
+            f3WallMesh.castShadow = true;
+            f3WallMesh.receiveShadow = true;
+            thirdGroup.add(f3WallMesh);
+
+            const f3Cornice = new THREE.Mesh(new THREE.BoxGeometry(f3W + 0.35, 0.28, f3D + 0.35), creamWallMat);
+            f3Cornice.position.set(0, f3BaseY + f3H - 0.14, f3CenterZ);
+            thirdGroup.add(f3Cornice);
+
+            [-3.5, 3.5].forEach((fx) => {
+                const winFront3 = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.35, 0.15), clerestoryWinMat);
+                winFront3.position.set(fx, f3BaseY + 1.35, f3CenterZ + f3D * 0.5 + 0.03);
+                thirdGroup.add(winFront3);
+
+                const winBack3 = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.35, 0.15), clerestoryWinMat);
+                winBack3.position.set(fx, f3BaseY + 1.35, f3CenterZ - f3D * 0.5 - 0.03);
+                thirdGroup.add(winBack3);
+            });
+
+            [-2.6, 0, 2.6].forEach((sz) => {
+                [-1, 1].forEach((dir) => {
+                    const winSide3 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.35, 1.45), clerestoryWinMat);
+                    winSide3.position.set(dir * (f3W * 0.5 + 0.03), f3BaseY + 1.35, f3CenterZ + sz);
+                    thirdGroup.add(winSide3);
+                });
+            });
+
+            const crownBottomW = f3W + 2.6;
+            const crownBottomD = f3D + 2.4;
+            const crownH = 3.55;
+            const crownBaseY = f3BaseY + f3H;
+
+            const crownRoofGeo = createCurvedHippedRoofGeometry(
+                crownBottomW, crownBottomD,
+                0.0, 0.0,
+                crownH, 0.45
+            );
+            const crownRoofMesh = new THREE.Mesh(crownRoofGeo, roofTileMat);
+            crownRoofMesh.position.set(0, crownBaseY, f3CenterZ);
+            crownRoofMesh.castShadow = true;
+            crownRoofMesh.receiveShadow = true;
+            thirdGroup.add(crownRoofMesh);
+
+            const corners = [
+                [-crownBottomW * 0.5, -crownBottomD * 0.5],
+                [ crownBottomW * 0.5, -crownBottomD * 0.5],
+                [ crownBottomW * 0.5,  crownBottomD * 0.5],
+                [-crownBottomW * 0.5,  crownBottomD * 0.5]
+            ];
+            corners.forEach(([cx, cz]) => {
+                const pts = [];
+                for (let s = 0; s <= 12; s++) {
+                    const t = s / 12;
+                    const rx = THREE.MathUtils.lerp(cx, 0, t);
+                    const rz = THREE.MathUtils.lerp(cz, 0, t);
+                    const ry = crownBaseY + Math.pow(t, 1.38) * crownH + (1 - t) * (1 - t) * (crownH * 0.085) + 0.06;
+                    pts.push(new THREE.Vector3(rx, ry, f3CenterZ + rz));
+                }
+                const ridgeCurve = new THREE.CatmullRomCurve3(pts);
+                const tubeGeo = new THREE.TubeGeometry(ridgeCurve, 16, 0.11, 6, false);
+                const tubeMesh = new THREE.Mesh(tubeGeo, roofTileMat);
+                tubeMesh.castShadow = true;
+                thirdGroup.add(tubeMesh);
+            });
+
+            const finialGroup = new THREE.Group();
+            finialGroup.position.set(0, crownBaseY + crownH, f3CenterZ);
+
+            const robanMesh = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.35, 0.95), roofTileMat);
+            robanMesh.position.y = 0.15;
+            finialGroup.add(robanMesh);
+
+            const lotusMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.48, 0.32, 12), roofTileMat);
+            lotusMesh.position.y = 0.45;
+            finialGroup.add(lotusMesh);
+
+            const jewelMesh = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), roofTileMat);
+            jewelMesh.position.y = 0.72;
+            finialGroup.add(jewelMesh);
+
+            const spireTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.65, 12), roofTileMat);
+            spireTip.position.y = 1.12;
+            finialGroup.add(spireTip);
+
+            thirdGroup.add(finialGroup);
+            stationGroup.add(thirdGroup);
+
+            // 車寄雨遮最前緣 Z 座標: pCenterZ (9.75) + skirtBottomD * 0.5 (5.0) = 14.75
+            return {
+                stationGroup,
+                roofOverhangFrontZ: pCenterZ + skirtBottomD * 0.5,
+                backEdgeZ: f1CenterZ - f1D * 0.5 - 0.35
+            };
+        }
+
+        // ==========================================
+        // 6. 翻板時鐘貼圖與四層防穿模翻轉機構
+        // ==========================================
+        function darkenHexColor(hex, factor = 0.5) {
+            const clean = hex.replace('#', '');
+            const r = Math.floor(parseInt(clean.substring(0, 2), 16) * factor);
+            const g = Math.floor(parseInt(clean.substring(2, 4), 16) * factor);
+            const b = Math.floor(parseInt(clean.substring(4, 6), 16) * factor);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        function getHalfTextures(digit) {
+            const cacheKey = `${customCardBgColor}_${customTextColor}_${digit}`;
+            if (textureCache[cacheKey]) return textureCache[cacheKey];
+
+            const borderColor = darkenHexColor(customCardBgColor, 0.5);
+            const fullCanvas = document.createElement('canvas');
+            fullCanvas.width = 256;
+            fullCanvas.height = 512;
+            const fCtx = fullCanvas.getContext('2d');
+
+            fCtx.fillStyle = '#070a10';
+            fCtx.fillRect(0, 0, 256, 512);
+
+            fCtx.save();
+            roundRect(fCtx, 6, 6, 244, 244, 18);
+            fCtx.fillStyle = customCardBgColor;
+            fCtx.fill();
+            fCtx.lineWidth = 3;
+            fCtx.strokeStyle = borderColor;
+            fCtx.stroke();
+            fCtx.restore();
+
+            fCtx.save();
+            roundRect(fCtx, 6, 262, 244, 244, 18);
+            fCtx.fillStyle = customCardBgColor;
+            fCtx.fill();
+            fCtx.lineWidth = 3;
+            fCtx.strokeStyle = borderColor;
+            fCtx.stroke();
+            fCtx.restore();
+
+            fCtx.save();
+            fCtx.translate(128, 260);
+            fCtx.scale(0.84, 1.38);
+            fCtx.fillStyle = customTextColor;
+            fCtx.font = 'bold 310px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            fCtx.textAlign = 'center';
+            fCtx.textBaseline = 'middle';
+            fCtx.fillText(digit, 0, 8);
+            fCtx.restore();
+
+            fCtx.fillStyle = '#05070c';
+            fCtx.fillRect(0, 250, 256, 12);
+            fCtx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+            fCtx.fillRect(6, 262, 244, 3);
+
+            const topCanvas = document.createElement('canvas');
+            topCanvas.width = 256;
+            topCanvas.height = 256;
+            topCanvas.getContext('2d').drawImage(fullCanvas, 0, 0, 256, 256, 0, 0, 256, 256);
+
+            const bottomCanvas = document.createElement('canvas');
+            bottomCanvas.width = 256;
+            bottomCanvas.height = 256;
+            bottomCanvas.getContext('2d').drawImage(fullCanvas, 0, 256, 256, 256, 0, 0, 256, 256);
+
+            const bottomFlippedCanvas = document.createElement('canvas');
+            bottomFlippedCanvas.width = 256;
+            bottomFlippedCanvas.height = 256;
+            const bfCtx = bottomFlippedCanvas.getContext('2d');
+            bfCtx.translate(128, 128);
+            bfCtx.rotate(Math.PI);
+            bfCtx.drawImage(bottomCanvas, -128, -128);
+
+            const topTex = new THREE.CanvasTexture(topCanvas);
+            const bottomTex = new THREE.CanvasTexture(bottomCanvas);
+            const bottomFlippedTex = new THREE.CanvasTexture(bottomFlippedCanvas);
+            topTex.colorSpace = THREE.SRGBColorSpace;
+            bottomTex.colorSpace = THREE.SRGBColorSpace;
+            bottomFlippedTex.colorSpace = THREE.SRGBColorSpace;
+
+            textureCache[cacheKey] = { top: topTex, bottom: bottomTex, bottomFlipped: bottomFlippedTex };
+            return textureCache[cacheKey];
+        }
+
+        function createFlipUnit(cardW = 2.05, halfH = 1.98) {
+            const group = new THREE.Group();
+
+            const topStatic = new THREE.Mesh(
+                new THREE.PlaneGeometry(cardW, halfH),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            topStatic.position.set(0, halfH / 2, 0.02);
+
+            const bottomStatic = new THREE.Mesh(
+                new THREE.PlaneGeometry(cardW, halfH),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            bottomStatic.position.set(0, -halfH / 2, 0.02);
+
+            const bottomShadow = new THREE.Mesh(
+                new THREE.PlaneGeometry(cardW, halfH),
+                new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 })
+            );
+            bottomShadow.position.set(0, -halfH / 2, 0.04);
+
+            const lugGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.12, 12);
+            lugGeo.rotateZ(Math.PI / 2);
+            const lugMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.25 });
+            const leftLug = new THREE.Mesh(lugGeo, lugMat);
+            leftLug.position.set(-cardW / 2 - 0.02, 0, 0.1);
+            const rightLug = new THREE.Mesh(lugGeo, lugMat);
+            rightLug.position.set(cardW / 2 + 0.02, 0, 0.1);
+
+            const flapPivot = new THREE.Group();
+            flapPivot.position.set(0, 0, 0.1);
+
+            const frontGeo = new THREE.PlaneGeometry(cardW, halfH);
+            frontGeo.translate(0, halfH / 2, 0.02);
+            const flapFront = new THREE.Mesh(frontGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+
+            const backGeo = new THREE.PlaneGeometry(cardW, halfH);
+            backGeo.rotateY(Math.PI);
+            backGeo.translate(0, halfH / 2, -0.02);
+            const flapBack = new THREE.Mesh(backGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+
+            const edgeGeo = new THREE.BoxGeometry(cardW, halfH, 0.035);
+            edgeGeo.translate(0, halfH / 2, 0);
+            const flapEdge = new THREE.Mesh(edgeGeo, new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 }));
+
+            flapPivot.add(flapFront, flapBack, flapEdge);
+            group.add(topStatic, bottomStatic, bottomShadow, leftLug, rightLug, flapPivot);
+
+            group.userData = {
+                currentValue: null,
+                timeline: null,
+                topStatic,
+                bottomStatic,
+                bottomShadow,
+                flapPivot,
+                flapFront,
+                flapBack
+            };
+            return group;
+        }
+
+        // ==========================================
+        // 7. 建構向前延伸至雨遮正下方的實木黃銅基座 + 前移玻璃櫥窗翻板時鐘
+        // ==========================================
+        function buildPedestalWithWindowClock(roofOverhangFrontZ, backEdgeZ) {
+            pedestalGroup = new THREE.Group();
+            pedestalGroup.name = 'Pedestal_Showcase_Base';
+
+            const woodMat = new THREE.MeshStandardMaterial({
+                map: createWalnutWoodTexture(),
+                roughness: 0.45,
+                metalness: 0.08
+            });
+            const brassMat = new THREE.MeshStandardMaterial({
+                color: 0xd4af37,
+                roughness: 0.28,
+                metalness: 0.85
+            });
+            const chamberMat = new THREE.MeshStandardMaterial({
+                color: 0x0b0e14,
+                roughness: 0.88
+            });
+
+            const baseW = 26.2;
+            const baseH = 6.8;
+            const frontZ = roofOverhangFrontZ + 0.15; // 向前延伸至車寄雨遮正下方前緣 (Z ≈ 14.9)
+            const backZ = backEdgeZ - 0.6;
+            const baseD = frontZ - backZ;
+            const centerZ = (frontZ + backZ) / 2;
+
+            // 1. 底部黃銅鑲邊底框
+            const footTrim = new THREE.Mesh(new THREE.BoxGeometry(baseW + 0.5, 0.42, baseD + 0.5), brassMat);
+            footTrim.position.set(0, 0.21, centerZ);
+            footTrim.receiveShadow = true;
+            pedestalGroup.add(footTrim);
+
+            // 2. 底部實木底板
+            const bottomSlab = new THREE.Mesh(new THREE.BoxGeometry(baseW, 0.95, baseD), woodMat);
+            bottomSlab.position.set(0, 0.42 + 0.475, centerZ);
+            bottomSlab.receiveShadow = true;
+            pedestalGroup.add(bottomSlab);
+
+            // 3. 頂部承載平台（完整托住車站主體與前突出車寄門廊）
+            const topSlabH = 0.78;
+            const topSlab = new THREE.Mesh(new THREE.BoxGeometry(baseW, topSlabH, baseD), woodMat);
+            topSlab.position.set(0, baseH - topSlabH / 2, centerZ);
+            topSlab.castShadow = true;
+            topSlab.receiveShadow = true;
+            pedestalGroup.add(topSlab);
+
+            const topBrassTrim = new THREE.Mesh(new THREE.BoxGeometry(baseW + 0.4, 0.22, baseD + 0.4), brassMat);
+            topBrassTrim.position.set(0, baseH - topSlabH - 0.11, centerZ);
+            pedestalGroup.add(topBrassTrim);
+
+            // 4. 基座左右兩翼實木墩座與後方主體，在車寄雨遮正下方圍出寬幅玻璃櫥窗展示艙
+            const wallH = baseH - 0.42 - 0.95 - topSlabH - 0.22; // 4.43
+            const wallY = 0.42 + 0.95 + wallH / 2; // 3.585
+            const winW = 16.8;
+            const sideW = (baseW - winW) / 2;
+            const chamberDepth = 4.4;
+
+            const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(sideW, wallH, baseD), woodMat);
+            leftPillar.position.set(-baseW / 2 + sideW / 2, wallY, centerZ);
+            leftPillar.castShadow = true;
+            leftPillar.receiveShadow = true;
+            pedestalGroup.add(leftPillar);
+
+            const rightPillar = new THREE.Mesh(new THREE.BoxGeometry(sideW, wallH, baseD), woodMat);
+            rightPillar.position.set(baseW / 2 - sideW / 2, wallY, centerZ);
+            rightPillar.castShadow = true;
+            rightPillar.receiveShadow = true;
+            pedestalGroup.add(rightPillar);
+
+            const backWallD = baseD - chamberDepth;
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(winW, wallH, backWallD), woodMat);
+            backWall.position.set(0, wallY, backZ + backWallD / 2);
+            backWall.receiveShadow = true;
+            pedestalGroup.add(backWall);
+
+            // 櫥窗內部深色背板、底板與頂部暖色 LED 燈條（位於雨遮正下方區域）
+            const chamberBackZ = frontZ - chamberDepth + 0.05;
+            const chamberBack = new THREE.Mesh(new THREE.PlaneGeometry(winW, wallH), chamberMat);
+            chamberBack.position.set(0, wallY, chamberBackZ);
+            pedestalGroup.add(chamberBack);
+
+            const chamberFloor = new THREE.Mesh(new THREE.PlaneGeometry(winW, chamberDepth), chamberMat);
+            chamberFloor.rotation.x = -Math.PI / 2;
+            chamberFloor.position.set(0, 0.42 + 0.95 + 0.01, frontZ - chamberDepth / 2);
+            pedestalGroup.add(chamberFloor);
+
+            const ledStrip = new THREE.Mesh(
+                new THREE.BoxGeometry(winW - 0.6, 0.14, 0.25),
+                new THREE.MeshStandardMaterial({ color: 0xfffbeb, emissive: 0xffd27d, emissiveIntensity: 1.6 })
+            );
+            ledStrip.position.set(0, wallY + wallH / 2 - 0.08, frontZ - 1.1);
+            pedestalGroup.add(ledStrip);
+
+            // 5. 前移至雨遮正下方玻璃櫥窗內的六位數機械翻板時鐘 (HH:MM:SS)
+            const clockZ = frontZ - 2.3;
+            clockGroup = new THREE.Group();
+            clockGroup.name = 'ChronoFlip_Clock_Unit';
+            clockGroup.position.set(0, wallY, clockZ);
+            pedestalGroup.add(clockGroup);
+
+            // 中央貫穿黃銅轉軸
+            const axleGeo = new THREE.CylinderGeometry(0.055, 0.055, winW - 1.2, 16);
+            axleGeo.rotateZ(Math.PI / 2);
+            const axle = new THREE.Mesh(axleGeo, brassMat);
+            axle.position.set(0, 0, 0.1);
+            clockGroup.add(axle);
+
+            // 冒號分隔點
+            const dotGeo = new THREE.BoxGeometry(0.22, 0.22, 0.2);
+            const dotMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, emissive: 0xd4af37, emissiveIntensity: 0.4 });
+            [[-2.42, 0.72], [-2.42, -0.72], [3.38, 0.72], [3.38, -0.72]].forEach(([dx, dy]) => {
+                const dot = new THREE.Mesh(dotGeo, dotMat);
+                dot.position.set(dx, dy, 0.25);
+                clockGroup.add(dot);
+            });
+
+            const keys = ['h1', 'h2', 'm1', 'm2', 's1', 's2'];
+            const xPositions = [-6.45, -4.05, -0.80, 1.60, 5.00, 7.40];
+            keys.forEach((key, idx) => {
+                const unit = createFlipUnit(2.05, 1.98);
+                unit.position.set(xPositions[idx], 0, 0);
+                clockGroup.add(unit);
+                flipUnits[key] = unit;
+            });
+
+            // 6. 基座正面玻璃窗黃銅邊框（齊平車寄雨遮前緣下方）
+            const frameT = 0.28;
+            const glassZ = frontZ - 0.05;
+            const topFrame = new THREE.Mesh(new THREE.BoxGeometry(winW + frameT * 2, frameT, 0.28), brassMat);
+            topFrame.position.set(0, wallY + wallH / 2 - frameT / 2, glassZ);
+            const botFrame = new THREE.Mesh(new THREE.BoxGeometry(winW + frameT * 2, frameT, 0.28), brassMat);
+            botFrame.position.set(0, wallY - wallH / 2 + frameT / 2, glassZ);
+            const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameT, wallH, 0.28), brassMat);
+            leftFrame.position.set(-winW / 2 + frameT / 2, wallY, glassZ);
+            const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(frameT, wallH, 0.28), brassMat);
+            rightFrame.position.set(winW / 2 - frameT / 2, wallY, glassZ);
+            pedestalGroup.add(topFrame, botFrame, leftFrame, rightFrame);
+
+            // 7. 透明展示玻璃窗片
+            const glassPaneMat = new THREE.MeshPhysicalMaterial({
+                color: 0xe0f2fe,
+                transparent: true,
+                opacity: 0.18,
+                roughness: 0.08,
+                metalness: 0.05,
+                reflectivity: 0.9,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.06,
+                depthWrite: false
+            });
+            const glassPane = new THREE.Mesh(new THREE.PlaneGeometry(winW - frameT, wallH - frameT), glassPaneMat);
+            glassPane.position.set(0, wallY, glassZ);
+            pedestalGroup.add(glassPane);
+
+            // 8. 玻璃窗下方黃銅紀念銘牌
+            const plaqueMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(6.2, 0.72, 0.12),
+                new THREE.MeshStandardMaterial({ map: createPlaqueTexture(), roughness: 0.35, metalness: 0.6 })
+            );
+            plaqueMesh.position.set(0, 0.42 + 0.475, frontZ + 0.04);
+            pedestalGroup.add(plaqueMesh);
+
+            return { topSurfaceY: baseH, frontZ, wallY };
+        }
+
+        function updateCard(key, nextDigit) {
+            const unit = flipUnits[key];
+            if (!unit) return;
+            const data = unit.userData;
+
+            if (data.currentValue === null) {
+                data.currentValue = nextDigit;
+                const tex = getHalfTextures(nextDigit);
+                data.topStatic.material.map = tex.top;
+                data.bottomStatic.material.map = tex.bottom;
+                data.flapFront.material.map = tex.top;
+                data.flapBack.material.map = tex.bottomFlipped;
+                data.topStatic.material.needsUpdate = true;
+                data.bottomStatic.material.needsUpdate = true;
+                data.flapFront.material.needsUpdate = true;
+                data.flapBack.material.needsUpdate = true;
+                return;
+            }
+
+            if (data.currentValue === nextDigit) return;
+
+            const prevDigit = data.currentValue;
+            data.currentValue = nextDigit;
+
+            if (data.timeline) data.timeline.kill();
+
+            const prevTex = getHalfTextures(prevDigit);
+            const nextTex = getHalfTextures(nextDigit);
+
+            data.topStatic.material.map = nextTex.top;
+            data.bottomStatic.material.map = prevTex.bottom;
+            data.flapFront.material.map = prevTex.top;
+            data.flapBack.material.map = nextTex.bottomFlipped;
+
+            data.topStatic.material.needsUpdate = true;
+            data.bottomStatic.material.needsUpdate = true;
+            data.flapFront.material.needsUpdate = true;
+            data.flapBack.material.needsUpdate = true;
+
+            data.flapPivot.rotation.x = 0;
+            data.flapFront.material.color.setScalar(1.0);
+            data.flapBack.material.color.setScalar(0.5);
+            data.topStatic.material.color.setScalar(0.55);
+            data.bottomShadow.material.opacity = 0;
+
+            playFlipSound();
+
+            const tl = gsap.timeline({
+                onUpdate: () => {
+                    const angle = data.flapPivot.rotation.x;
+                    const halfPi = Math.PI / 2;
+                    if (angle <= halfPi) {
+                        const p = angle / halfPi;
+                        data.flapFront.material.color.setScalar(1.0 - 0.45 * p);
+                        data.topStatic.material.color.setScalar(0.55 + 0.45 * p);
+                        data.bottomShadow.material.opacity = 0.25 * p;
+                    } else {
+                        const p = Math.min(1, (angle - halfPi) / halfPi);
+                        data.flapBack.material.color.setScalar(0.5 + 0.5 * p);
+                        data.topStatic.material.color.setScalar(1.0);
+                        data.bottomShadow.material.opacity = 0.25 + 0.45 * p;
+                    }
+                },
+                onComplete: () => {
+                    data.bottomStatic.material.map = nextTex.bottom;
+                    data.flapFront.material.map = nextTex.top;
+                    data.bottomStatic.material.needsUpdate = true;
+                    data.flapFront.material.needsUpdate = true;
+
+                    data.flapPivot.rotation.x = 0;
+                    data.flapFront.material.color.setScalar(1.0);
+                    data.flapBack.material.color.setScalar(1.0);
+                    data.topStatic.material.color.setScalar(1.0);
+                    data.bottomShadow.material.opacity = 0;
+                    data.timeline = null;
+                }
+            });
+
+            tl.to(data.flapPivot.rotation, { x: Math.PI / 2, duration: 0.2, ease: 'power2.in' })
+              .to(data.flapPivot.rotation, { x: Math.PI, duration: 0.24, ease: 'back.out(1.6)' });
+
+            data.timeline = tl;
+        }
+
+        function refreshAllCardTextures() {
+            Object.keys(flipUnits).forEach(key => {
+                const data = flipUnits[key].userData;
+                if (data.currentValue !== null) {
+                    const tex = getHalfTextures(data.currentValue);
+                    data.topStatic.material.map = tex.top;
+                    data.bottomStatic.material.map = tex.bottom;
+                    data.flapFront.material.map = tex.top;
+                    data.flapBack.material.map = tex.bottomFlipped;
+                    data.topStatic.material.needsUpdate = true;
+                    data.bottomStatic.material.needsUpdate = true;
+                    data.flapFront.material.needsUpdate = true;
+                    data.flapBack.material.needsUpdate = true;
+                }
+            });
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+
+            updateCard('h1', h[0]);
+            updateCard('h2', h[1]);
+            updateCard('m1', m[0]);
+            updateCard('m2', m[1]);
+            updateCard('s1', s[0]);
+            updateCard('s2', s[1]);
+
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            document.getElementById('hud-date').textContent = `${now.getFullYear()}/${month}/${day} (${weekdays[now.getDay()]})`;
+            document.getElementById('hud-time').textContent = `${h}:${m}:${s}`;
+        }
+
+        // ==========================================
+        // 8. 場景初始化、光影模式、視角切換與 GLB 匯出
+        // ==========================================
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color('#dfe4ea');
+            scene.fog = new THREE.FogExp2('#dfe4ea', 0.0065);
+
+            camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.5, 280);
+            camera.position.set(-28, 19, 36);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.05;
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI / 2 - 0.02;
+            controls.minDistance = 12;
+            controls.maxDistance = 95;
+            controls.target.set(0, 8.5, 2.0);
+
+            controls.addEventListener('start', () => {
+                targetCamPos = null;
+                targetLookAt = null;
+            });
+
+            ambientLight = new THREE.AmbientLight('#ffffff', 0.55);
+            scene.add(ambientLight);
+
+            hemiLight = new THREE.HemisphereLight('#f0f6ff', '#8d8578', 0.65);
+            hemiLight.position.set(0, 45, 0);
+            scene.add(hemiLight);
+
+            dirLight = new THREE.DirectionalLight('#fff8eb', 1.65);
+            dirLight.position.set(-22, 38, 28);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 5;
+            dirLight.shadow.camera.far = 110;
+            const d = 28;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            dirLight.shadow.bias = -0.0005;
+            scene.add(dirLight);
+
+            const groundGeo = new THREE.PlaneGeometry(260, 260);
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: '#d8dde3',
+                roughness: 0.92,
+                metalness: 0.02
+            });
+            const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            const gridHelper = new THREE.GridHelper(130, 52, '#9aa5b4', '#c5cdd8');
+            gridHelper.position.y = 0.01;
+            gridHelper.material.opacity = 0.35;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+
+            // 組合完整桌飾：下方延伸基座（正面玻璃窗內嵌翻板時鐘）＋ 上方第一版完整舊高雄車站
+            ornamentGroup = new THREE.Group();
+            ornamentGroup.name = 'Kaohsiung_Station_Pedestal_Ornament';
+            scene.add(ornamentGroup);
+
+            const built = buildKaohsiungStationModel();
+            const pedInfo = buildPedestalWithWindowClock(built.roofOverhangFrontZ, built.backEdgeZ);
+
+            ornamentGroup.add(pedestalGroup);
+
+            stationGroup.position.set(0, pedInfo.topSurfaceY, 0);
+            ornamentGroup.add(stationGroup);
+
+            // 基座玻璃櫥窗內部暖白照明燈
+            showcaseLight = new THREE.PointLight('#ffdfa0', 2.2, 16);
+            showcaseLight.position.set(0, pedInfo.wallY + 1.4, pedInfo.frontZ - 1.2);
+            ornamentGroup.add(showcaseLight);
+
+            setupUIEvents();
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function setLightingMode(mode) {
+            const body = document.body;
+            const badge = document.getElementById('lighting-badge');
+
+            if (mode === 'day') {
+                body.classList.remove('dark-mode');
+                scene.background.set('#dfe4ea');
+                scene.fog.color.set('#dfe4ea');
+                dirLight.color.set('#fff8eb');
+                dirLight.intensity = 1.65;
+                dirLight.position.set(-22, 38, 28);
+                hemiLight.intensity = 0.65;
+                ambientLight.intensity = 0.55;
+                showcaseLight.intensity = 2.2;
+                renderer.toneMappingExposure = 1.05;
+
+                windowMaterials.forEach(m => m.emissiveIntensity = 0.0);
+                signMeshes.forEach(m => m.emissiveIntensity = 0.0);
+                porticoLights.forEach(l => l.intensity = 0);
+
+                badge.textContent = '日間陽光';
+                badge.className = 'text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium';
+            } else if (mode === 'sunset') {
+                body.classList.remove('dark-mode');
+                scene.background.set('#f3cbb2');
+                scene.fog.color.set('#f3cbb2');
+                dirLight.color.set('#ff8c42');
+                dirLight.intensity = 2.0;
+                dirLight.position.set(-34, 16, 22);
+                hemiLight.color.set('#ffd2a6');
+                hemiLight.intensity = 0.6;
+                ambientLight.intensity = 0.45;
+                showcaseLight.intensity = 3.2;
+                renderer.toneMappingExposure = 1.02;
+
+                windowMaterials.forEach(m => m.emissiveIntensity = 0.25);
+                signMeshes.forEach(m => m.emissiveIntensity = 0.35);
+                porticoLights.forEach(l => l.intensity = 1.5);
+
+                badge.textContent = '黃昏暖陽';
+                badge.className = 'text-[11px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-medium';
+            } else if (mode === 'night') {
+                body.classList.add('dark-mode');
+                scene.background.set('#0f172a');
+                scene.fog.color.set('#0f172a');
+                dirLight.color.set('#6488ea');
+                dirLight.intensity = 0.45;
+                dirLight.position.set(18, 28, -20);
+                hemiLight.color.set('#1e293b');
+                hemiLight.intensity = 0.35;
+                ambientLight.intensity = 0.25;
+                showcaseLight.intensity = 4.5;
+                renderer.toneMappingExposure = 1.15;
+
+                windowMaterials.forEach(m => m.emissiveIntensity = 1.45);
+                signMeshes.forEach(m => m.emissiveIntensity = 1.35);
+                porticoLights.forEach(l => l.intensity = 4.5);
+
+                badge.textContent = '夜間點燈';
+                badge.className = 'text-[11px] px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-200 font-medium';
+            }
+        }
+
+        function setCameraPreset(preset) {
+            if (preset === 'iso') {
+                targetCamPos = new THREE.Vector3(-28, 19, 36);
+                targetLookAt = new THREE.Vector3(0, 8.5, 2.0);
+            } else if (preset === 'front') {
+                targetCamPos = new THREE.Vector3(0, 10.5, 42);
+                targetLookAt = new THREE.Vector3(0, 8.2, 4.0);
+            } else if (preset === 'clock') {
+                targetCamPos = new THREE.Vector3(0, 4.2, 27);
+                targetLookAt = new THREE.Vector3(0, 3.6, 12.6);
+            }
+        }
+
+        function exportToGLB() {
+            showToast('正在產生 Kaohsiung_Station_Pedestal_Clock.glb 模型檔...');
+            const exporter = new GLTFExporter();
+            exporter.parse(
+                ornamentGroup,
+                function (result) {
+                    const blob = new Blob([result], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.style.display = 'none';
+                    link.href = url;
+                    link.download = 'Kaohsiung_Station_Pedestal_Clock.glb';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    showToast('✅ 已成功匯出 Kaohsiung_Station_Pedestal_Clock.glb！');
+                },
+                function (error) {
+                    console.error('GLTFExporter Error:', error);
+                    showToast('❌ 模型匯出失敗，請稍後再試。', true);
+                },
+                { binary: true }
+            );
+        }
+
+        function setupUIEvents() {
+            const toggleBtn = document.getElementById('toggle-panel-btn');
+            const panel = document.getElementById('control-panel');
+            const toggleText = document.getElementById('toggle-panel-text');
+            let isPanelOpen = true;
+
+            toggleBtn.addEventListener('click', () => {
+                isPanelOpen = !isPanelOpen;
+                if (isPanelOpen) {
+                    panel.classList.remove('hidden');
+                    toggleText.textContent = '隱藏控制項';
+                } else {
+                    panel.classList.add('hidden');
+                    toggleText.textContent = '顯示控制項';
+                }
+            });
+
+            document.querySelectorAll('.light-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.light-btn').forEach(b => b.classList.remove('btn-active'));
+                    btn.classList.add('btn-active');
+                    setLightingMode(btn.dataset.light);
+                });
+            });
+
+            document.querySelectorAll('.cam-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('btn-active'));
+                    btn.classList.add('btn-active');
+                    setCameraPreset(btn.dataset.cam);
+                });
+            });
+
+            const rotateBtn = document.getElementById('auto-rotate-btn');
+            const rotateLabel = document.getElementById('rotate-label');
+            rotateBtn.addEventListener('click', () => {
+                isAutoRotating = !isAutoRotating;
+                controls.autoRotate = isAutoRotating;
+                controls.autoRotateSpeed = 1.2;
+                rotateLabel.textContent = isAutoRotating ? '自動旋轉：開' : '自動旋轉：關';
+                rotateBtn.classList.toggle('btn-active', isAutoRotating);
+            });
+
+            document.getElementById('text-color-picker').addEventListener('input', (e) => {
+                customTextColor = e.target.value;
+                refreshAllCardTextures();
+            });
+
+            document.getElementById('bg-color-picker').addEventListener('input', (e) => {
+                customCardBgColor = e.target.value;
+                refreshAllCardTextures();
+            });
+
+            const soundBtn = document.getElementById('sound-toggle-btn');
+            soundBtn.addEventListener('click', () => {
+                soundEnabled = !soundEnabled;
+                soundBtn.textContent = soundEnabled ? '🔊 音效: 開' : '🔇 音效: 關';
+            });
+
+            document.getElementById('export-glb-btn').addEventListener('click', exportToGLB);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (targetCamPos && targetLookAt) {
+                camera.position.lerp(targetCamPos, 0.07);
+                controls.target.lerp(targetLookAt, 0.07);
+                if (camera.position.distanceTo(targetCamPos) < 0.08) {
+                    targetCamPos = null;
+                    targetLookAt = null;
+                }
+            }
+
+            controls.update();
+            updateClock();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            initScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
